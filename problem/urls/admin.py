@@ -1,7 +1,8 @@
 from django.conf.urls import url
 
 from ..views.admin import (ContestProblemAPI, ProblemAPI, TestCaseAPI, MakeContestProblemPublicAPIView,
-                           CompileSPJAPI, AddContestProblemAPI, ExportProblemAPI, ImportProblemAPI)
+                           CompileSPJAPI, AddContestProblemAPI, ExportProblemAPI, ImportProblemAPI,
+                           FPSProblemImport)
 
 urlpatterns = [
     url(r"^test_case/?$", TestCaseAPI.as_view(), name="test_case_api"),
@@ -12,4 +13,5 @@ urlpatterns = [
     url(r"^contest/add_problem_from_public/?$", AddContestProblemAPI.as_view(), name="add_contest_problem_from_public_api"),
     url(r"^export_problem/?$", ExportProblemAPI.as_view(), name="export_problem_api"),
     url(r"^import_problem/?$", ImportProblemAPI.as_view(), name="import_problem_api"),
+    url(r"^import_fps/?$", FPSProblemImport.as_view(), name="fps_problem_api"),
 ]

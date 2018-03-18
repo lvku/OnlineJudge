@@ -133,6 +133,7 @@ class ExportProblemSerializer(serializers.ModelSerializer):
     spj = serializers.SerializerMethodField()
     template = serializers.SerializerMethodField()
     source = serializers.SerializerMethodField()
+    tags = serializers.SlugRelatedField(many=True, slug_field="name", read_only=True)
 
     def get_display_id(self, obj):
         return obj._id
@@ -171,7 +172,7 @@ class ExportProblemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Problem
-        fields = ("display_id", "title", "description",
+        fields = ("display_id", "title", "description", "tags",
                   "input_description", "output_description",
                   "test_case_score", "hint", "time_limit", "memory_limit", "samples",
                   "template", "spj", "rule_type", "source", "template")
@@ -233,3 +234,24 @@ class ImportProblemSerializer(serializers.Serializer):
     rule_type = serializers.ChoiceField(choices=ProblemRuleType.choices())
     source = serializers.CharField(max_length=200, allow_blank=True, allow_null=True)
     answers = serializers.ListField(child=AnswerSerializer())
+    tags = serializers.ListField(child=serializers.CharField())
+
+
+class FPSProblemSerializer(serializers.Serializer):
+    class UnitSerializer(serializers.Serializer):
+        unit = serializers.ChoiceField(choices=["MB", "s", "ms"])
+        value = serializers.IntegerField(min_value=1, max_value=60000)
+
+    title = serializers.CharField(max_length=128)
+    description = serializers.CharField()
+    input = serializers.CharField()
+    output = serializers.CharField()
+    hint = serializers.CharField(allow_blank=True, allow_null=True)
+    time_limit = UnitSerializer()
+    memory_limit = UnitSerializer()
+    samples = serializers.ListField(child=CreateSampleSerializer())
+    source = serializers.CharField(max_length=200, allow_blank=True, allow_null=True)
+    spj = SPJSerializer(allow_null=True)
+    template = serializers.ListField(child=serializers.DictField(), allow_empty=True, allow_null=True)
+    append = serializers.ListField(child=serializers.DictField(), allow_empty=True, allow_null=True)
+    prepend = serializers.ListField(child=serializers.DictField(), allow_empty=True, allow_null=True)

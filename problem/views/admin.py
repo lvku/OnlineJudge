@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import zipfile
+import tempfile
 from wsgiref.util import FileWrapper
 
 from django.conf import settings
@@ -20,12 +21,14 @@ from utils.shortcuts import rand_str, natural_sort_key
 from utils.tasks import delete_files
 from utils.constants import Difficulty
 
+from ..utils import TEMPLATE_BASE, build_problem_template
 from ..models import Problem, ProblemRuleType, ProblemTag
 from ..serializers import (CreateContestProblemSerializer, CompileSPJSerializer,
                            CreateProblemSerializer, EditProblemSerializer, EditContestProblemSerializer,
                            ProblemAdminSerializer, TestCaseUploadForm, ContestProblemMakePublicSerializer,
                            AddContestProblemSerializer, ExportProblemSerializer,
-                           ExportProblemRequestSerialzier, UploadProblemForm, ImportProblemSerializer)
+                           ExportProblemRequestSerialzier, UploadProblemForm, ImportProblemSerializer,
+                           FPSProblemSerializer)
 
 
 class TestCaseZipProcessor(object):
@@ -560,7 +563,8 @@ class ImportProblemAPI(CSRFExemptAPIView, TestCaseZipProcessor):
 
                         problem_info["display_id"] = problem_info["display_id"][:24]
                         for k, v in problem_info["template"].items():
-                            problem_info["template"][k] = "".join([v["prepend"], v["template"], v["append"]])
+                            problem_info["template"][k] = build_problem_template(v["prepend"], v["template"],
+                                                                                 v["append"])
 
                         spj = problem_info["spj"] is not None
                         rule_type = problem_info["rule_type"]
@@ -569,52 +573,109 @@ class ImportProblemAPI(CSRFExemptAPIView, TestCaseZipProcessor):
                         # process test case
                         _, test_case_id = self.process_zip(tmp_file, spj=spj, dir=f"{i}/testcase/")
 
-                        Problem.objects.create(_id=problem_info["display_id"],
-                                               title=problem_info["title"],
-                                               description=problem_info["description"]["value"],
-                                               input_description=problem_info["input_description"]["value"],
-                                               output_description=problem_info["output_description"]["value"],
-                                               hint=problem_info["hint"]["value"],
-                                               test_case_score=test_case_score if test_case_score else [],
-                                               time_limit=problem_info["time_limit"],
-                                               memory_limit=problem_info["memory_limit"],
-                                               samples=problem_info["samples"],
-                                               template=problem_info["template"],
-                                               rule_type=problem_info["rule_type"],
-                                               source=problem_info["source"],
-                                               spj=spj,
-                                               spj_code=problem_info["spj"]["code"] if spj else None,
-                                               spj_language=problem_info["spj"]["language"] if spj else None,
-                                               spj_version=rand_str(8) if spj else "",
-                                               languages=language_names,
-                                               created_by=request.user,
-                                               visible=False,
-                                               difficulty=Difficulty.MID,
-                                               total_score=sum(item["score"] for item in test_case_score)
-                                               if rule_type == ProblemRuleType.OI else 0,
-                                               test_case_id=test_case_id
-                                               )
+                        problem_obj = Problem.objects.create(_id=problem_info["display_id"],
+                                                             title=problem_info["title"],
+                                                             description=problem_info["description"]["value"],
+                                                             input_description=problem_info["input_description"][
+                                                                 "value"],
+                                                             output_description=problem_info["output_description"][
+                                                                 "value"],
+                                                             hint=problem_info["hint"]["value"],
+                                                             test_case_score=test_case_score if test_case_score else [],
+                                                             time_limit=problem_info["time_limit"],
+                                                             memory_limit=problem_info["memory_limit"],
+                                                             samples=problem_info["samples"],
+                                                             template=problem_info["template"],
+                                                             rule_type=problem_info["rule_type"],
+                                                             source=problem_info["source"],
+                                                             spj=spj,
+                                                             spj_code=problem_info["spj"]["code"] if spj else None,
+                                                             spj_language=problem_info["spj"][
+                                                                 "language"] if spj else None,
+                                                             spj_version=rand_str(8) if spj else "",
+                                                             languages=language_names,
+                                                             created_by=request.user,
+                                                             visible=False,
+                                                             difficulty=Difficulty.MID,
+                                                             total_score=sum(item["score"] for item in test_case_score)
+                                                             if rule_type == ProblemRuleType.OI else 0,
+                                                             test_case_id=test_case_id
+                                                             )
+                        for tag_name in problem_info["tags"]:
+                            print(problem_obj)
+                            tag_obj, _ = ProblemTag.objects.get_or_create(name=tag_name)
+                            print(tag_obj)
+                            problem_obj.tags.add(tag_obj)
         return self.success({"import_count": count})
 
 
 class FPSProblemImport(CSRFExemptAPIView):
     request_parsers = ()
 
+    def _create_problem(self, problem_data, creator):
+        if problem_data["time_limit"]["unit"] == "ms":
+            time_limit = problem_data["time_limit"]["value"]
+        else:
+            time_limit = problem_data["time_limit"]["value"] * 1000
+        template = {}
+        prepend = {}
+        append = {}
+        for t in problem_data["prepend"]:
+            prepend[t["language"]] = t["code"]
+        for t in problem_data["append"]:
+            append[t["language"]] = t["code"]
+        for t in problem_data["template"]:
+            our_lang = lang = t["language"]
+            if lang == "Python":
+                our_lang = "Python3"
+            template[our_lang] = TEMPLATE_BASE.format(prepend.get(lang, ""), t["code"], append.get(lang, ""))
+        spj = problem_data["spj"] is not None
+        Problem.objects.create(_id=f"fps-{rand_str(4)}",
+                               title=problem_data["title"],
+                               description=problem_data["description"],
+                               input_description=problem_data["input"],
+                               output_description=problem_data["output"],
+                               hint=problem_data["hint"],
+                               test_case_score=[],
+                               time_limit=time_limit,
+                               memory_limit=problem_data["memory_limit"]["value"],
+                               samples=problem_data["samples"],
+                               template=template,
+                               rule_type=ProblemRuleType.ACM,
+                               source=problem_data.get("source", ""),
+                               spj=spj,
+                               spj_code=problem_data["spj"]["code"] if spj else None,
+                               spj_language=problem_data["spj"]["language"] if spj else None,
+                               spj_version=rand_str(8) if spj else "",
+                               visible=False,
+                               languages=language_names,
+                               created_by=creator,
+                               difficulty=Difficulty.MID,
+                               test_case_id=problem_data["test_case_id"])
+
     def post(self, request):
         form = UploadProblemForm(request.POST, request.FILES)
         if form.is_valid():
             file = form.cleaned_data["file"]
-            tmp_file = f"/tmp/{rand_str()}.xml"
-            with open(tmp_file, "wb") as f:
-                for chunk in file:
-                    f.write(chunk)
+            with tempfile.NamedTemporaryFile("wb") as tf:
+                for chunk in file.chunks(4096):
+                    tf.file.write(chunk)
+                problems = FPSParser(tf.name).parse()
         else:
-            return self.error("Upload failed")
+            return self.error("Parse upload file error")
 
-        problems = FPSParser(tmp_file).parse()
         helper = FPSHelper()
-        for index, problem in enumerate(problems):
-            path = os.path.join("/tmp/", str(index + 1))
-            os.mkdir(path)
-            helper.save_test_case(problem, path)
-            helper.save_image(problem, "/tmp", "/static/img")
+        with transaction.atomic():
+            for _problem in problems:
+                test_case_id = rand_str()
+                test_case_dir = os.path.join(settings.TEST_CASE_DIR, test_case_id)
+                os.mkdir(test_case_dir)
+                helper.save_test_case(_problem, test_case_dir)
+                problem_data = helper.save_image(_problem, settings.UPLOAD_DIR, settings.UPLOAD_PREFIX)
+                s = FPSProblemSerializer(data=problem_data)
+                if not s.is_valid():
+                    return self.error(f"Parse FPS file error: {s.errors}")
+                problem_data = s.data
+                problem_data["test_case_id"] = test_case_id
+                self._create_problem(problem_data, request.user)
+        return self.success({"import_count": len(problems)})
