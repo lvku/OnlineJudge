@@ -21,6 +21,7 @@ class UserRegisterSerializer(serializers.Serializer):
     password = serializers.CharField(min_length=6)
     email = serializers.EmailField(max_length=64)
     captcha = serializers.CharField()
+    vipcode = serializers.CharField()
 
 
 class UserChangePasswordSerializer(serializers.Serializer):
@@ -64,7 +65,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "username", "email", "admin_type", "problem_permission",
-                  "create_time", "last_login", "two_factor_auth", "open_api", "is_disabled"]
+                  "create_time", "last_login", "two_factor_auth", "open_api",
+                  "is_disabled", "is_vip"]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

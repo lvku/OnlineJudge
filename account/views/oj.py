@@ -218,6 +218,9 @@ class UserRegisterAPI(APIView):
         data = request.data
         data["username"] = data["username"].lower()
         data["email"] = data["email"].lower()
+        is_vip = False
+        if 'vipcode' in data and data['vipcode'] == '4088760021':
+            is_vip = True
         captcha = Captcha(request)
         if not captcha.check(data["captcha"]):
             return self.error("Invalid captcha")
@@ -225,7 +228,10 @@ class UserRegisterAPI(APIView):
             return self.error("Username already exists")
         if User.objects.filter(email=data["email"]).exists():
             return self.error("Email already exists")
-        user = User.objects.create(username=data["username"], email=data["email"])
+        user = User.objects.create(
+            username=data["username"],
+            email=data["email"],
+            is_vip=is_vip)
         user.set_password(data["password"])
         user.save()
         UserProfile.objects.create(user=user)
