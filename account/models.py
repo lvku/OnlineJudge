@@ -41,6 +41,7 @@ class User(AbstractBaseUser):
     open_api = models.BooleanField(default=False)
     open_api_appkey = models.CharField(max_length=32, null=True)
     is_disabled = models.BooleanField(default=False)
+    is_vip = models.BooleanField(default=False)
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = []
