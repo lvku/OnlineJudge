@@ -64,6 +64,7 @@ class UserAdminAPI(APIView):
         user.email = data["email"]
         user.admin_type = data["admin_type"]
         user.is_disabled = data["is_disabled"]
+        user.is_vip = data["is_vip"]
 
         if data["admin_type"] == AdminType.ADMIN:
             user.problem_permission = data["problem_permission"]
