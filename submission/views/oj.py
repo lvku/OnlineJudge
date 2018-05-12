@@ -92,10 +92,8 @@ class SubmissionAPI(APIView):
         if not submission.check_user_permission(request.user):
             return self.error("No permission for this submission")
 
-        if submission.problem.rule_type == ProblemRuleType.OI or request.user.is_admin_role():
-            submission_data = SubmissionModelSerializer(submission).data
-        else:
-            submission_data = SubmissionSafeModelSerializer(submission).data
+        submission_data = SubmissionModelSerializer(submission).data
+        
         # 是否有权限取消共享
         submission_data["can_unshare"] = submission.check_user_permission(request.user, check_share=False)
         return self.success(submission_data)
